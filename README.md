@@ -113,6 +113,17 @@ Install both if you want the full Hempdawg menu set. This Alpha Gen package is e
 
 ---
 
+
+---
+
+## Example workflow
+
+A ready graph is included:
+
+`workflows/LTX-2.5_V2V_ICLoRA_AlphaGen_wdtr62_update.json`
+
+In ComfyUI: **Workflow → Open** (or drag the JSON onto the canvas). Install this package first, plus LTX-2.5 models / Alpha Gen IC-LoRA as listed in the workflow **Model Links** note.
+
 ## License
 
 Use and modify for personal or commercial projects. If you redistribute, keep credit to **Hempdawg** and leave this README with the package when practical.
