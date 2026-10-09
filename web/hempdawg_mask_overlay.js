@@ -1,65 +1,88 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
-const CHROME = 52; // label + status + padding inside widget
+const MIN_PLAYER_H = 72;
+const EMPTY_PLAYER_H = 88;
+const LABEL_STATUS = 36; // label + status + padding inside player
 
-function fitNodeToWidget(node) {
-  const widget = node._hempMaskPlayerWidget;
-  if (!widget) return;
-  const width = Math.max(280, node.size?.[0] || 320);
-  if (node._hempMaskPlayerVisible === false) {
-    const computed = node.computeSize();
-    node.setSize([width, computed[1]]);
-    app.graph?.setDirtyCanvas?.(true, true);
-    return;
+function getShowPlayerWidget(node) {
+  return node.widgets?.find((w) => w.name === "show_player");
+}
+
+function nonPlayerHeight(node, playerWidget) {
+  // Space used by title/slots/other widgets — leftover is for the player.
+  let chrome = 52;
+  const slots = Math.max(node.inputs?.length || 0, node.outputs?.length || 0);
+  chrome += Math.min(slots, 8) * 6;
+  for (const w of node.widgets || []) {
+    if (!w || w === playerWidget) continue;
+    if (typeof w.computeSize === "function") {
+      try {
+        const sz = w.computeSize(node.size?.[0] || 320);
+        chrome += Array.isArray(sz) ? Number(sz[1]) || 22 : 22;
+        continue;
+      } catch (_) {}
+    }
+    chrome += 22;
   }
-  const size = widget.computeSize(width);
-  const computed = node.computeSize();
-  const newH = Math.max(computed[1], size[1] + 120);
-  node.setSize([width, newH]);
-  app.graph?.setDirtyCanvas?.(true, true);
+  return chrome;
+}
+
+function playerHeightForNode(node, playerWidget) {
+  if (node._hempMaskPlayerVisible === false) return 0;
+  const nodeH = Math.max(120, node.size?.[1] || 280);
+  const avail = nodeH - nonPlayerHeight(node, playerWidget);
+  return Math.max(MIN_PLAYER_H, avail);
 }
 
 function layoutPlayer(node) {
   const wrap = node._hempMaskWrapEl;
   const video = node._hempMaskVideoEl;
+  const media = node._hempMaskMediaEl;
   const widget = node._hempMaskPlayerWidget;
   if (!wrap || !video || !widget) return;
-  if (node._hempMaskPlayerVisible === false) return;
-
-  const width = Math.max(200, (node.size?.[0] || 320) - 20);
-  let widgetH = widget.computedHeight || 88;
-  if (typeof widget.computeSize === "function") {
-    widgetH = widget.computeSize(width)[1];
+  if (node._hempMaskPlayerVisible === false) {
+    wrap.style.display = "none";
+    wrap.style.height = "0px";
+    widget.computedHeight = 0;
+    return;
   }
+
+  const playerH = playerHeightForNode(node, widget);
+  widget.computedHeight = playerH;
+
+  wrap.style.display = "flex";
+  wrap.style.flexDirection = "column";
   wrap.style.width = "100%";
-  wrap.style.height = `${Math.max(72, widgetH)}px`;
+  wrap.style.height = `${playerH}px`;
+  wrap.style.maxHeight = `${playerH}px`;
   wrap.style.overflow = "hidden";
   wrap.style.boxSizing = "border-box";
 
-  const mediaH = Math.max(48, widgetH - CHROME);
+  const mediaH = Math.max(40, playerH - LABEL_STATUS);
+  if (media) {
+    media.style.height = `${mediaH}px`;
+    media.style.maxHeight = `${mediaH}px`;
+    media.style.minHeight = "0";
+    media.style.flex = "1 1 auto";
+    media.style.overflow = "hidden";
+  }
   video.style.width = "100%";
-  video.style.height = `${mediaH}px`;
+  video.style.height = "100%";
   video.style.maxWidth = "100%";
-  video.style.maxHeight = `${mediaH}px`;
+  video.style.maxHeight = "100%";
   video.style.objectFit = "contain";
   video.style.display = "block";
 }
 
-function playerComputeSize(node, video) {
+function playerComputeSize(node) {
   return function (width) {
     const w = Math.max(200, (width || node.size?.[0] || 320) - 20);
     if (node._hempMaskPlayerVisible === false) {
       this.computedHeight = 0;
       return [w, 0];
     }
-    if (!video.src || !video.videoWidth || !video.videoHeight) {
-      this.computedHeight = 88;
-      return [w, 88];
-    }
-    const ratio = video.videoWidth / Math.max(1, video.videoHeight);
-    const mediaH = Math.min(360, Math.max(100, w / ratio));
-    const h = Math.round(mediaH + CHROME);
+    const h = playerHeightForNode(node, this);
     this.computedHeight = h;
     return [w, h];
   };
@@ -84,22 +107,24 @@ function setPlayerVisible(node, visible) {
     }
     wrap.style.display = "none";
     wrap.style.height = "0px";
+    widget.computedHeight = 0;
     if (status) status.textContent = "Player off — outputs still update on run.";
+    const width = Math.max(280, node.size?.[0] || 320);
+    const computed = node.computeSize();
+    node.setSize([width, computed[1]]);
   } else {
-    wrap.style.display = "block";
+    wrap.style.display = "flex";
     if (status && (!video?.src || status.textContent.startsWith("Player off"))) {
       status.textContent = "Connect original + mask videos, then run.";
     }
+    if (!widget.computedHeight || widget.computedHeight < MIN_PLAYER_H) {
+      widget.computedHeight = EMPTY_PLAYER_H;
+    }
   }
 
-  widget.computeSize = playerComputeSize(node, video);
+  widget.computeSize = playerComputeSize(node);
   layoutPlayer(node);
-  fitNodeToWidget(node);
-  layoutPlayer(node);
-}
-
-function getShowPlayerWidget(node) {
-  return node.widgets?.find((w) => w.name === "show_player");
+  app.graph?.setDirtyCanvas?.(true, true);
 }
 
 function wireShowPlayerToggle(node) {
@@ -122,34 +147,42 @@ function attachPlayer(node) {
   const wrap = document.createElement("div");
   wrap.className = "hemp-mask-overlay-player";
   wrap.style.cssText =
-    "width:100%;height:88px;overflow:hidden;padding:4px 0 2px;box-sizing:border-box;position:relative;";
+    "width:100%;height:88px;max-height:100%;overflow:hidden;padding:4px 0 2px;box-sizing:border-box;position:relative;display:flex;flex-direction:column;";
 
   const label = document.createElement("div");
   label.textContent = "Mask Overlay Preview";
   label.style.cssText =
-    "font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:#9aa7b5;margin:0 0 4px 2px;";
+    "flex:0 0 auto;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:#9aa7b5;margin:0 0 4px 2px;";
+
+  const media = document.createElement("div");
+  media.className = "hemp-mask-overlay-media";
+  media.style.cssText =
+    "flex:1 1 auto;min-height:0;width:100%;overflow:hidden;background:#0b0f14;border-radius:6px;";
 
   const video = document.createElement("video");
   video.controls = true;
   video.playsInline = true;
   video.style.cssText =
-    "width:100%;height:48px;max-width:100%;background:#0b0f14;border-radius:6px;display:block;outline:none;object-fit:contain;";
+    "width:100%;height:100%;max-width:100%;max-height:100%;background:#0b0f14;display:block;outline:none;object-fit:contain;";
 
   const status = document.createElement("div");
   status.style.cssText =
-    "font-size:11px;color:#7d8793;margin-top:4px;min-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
+    "flex:0 0 auto;font-size:11px;color:#7d8793;margin-top:4px;min-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;";
   status.textContent = "Connect original + mask videos, then run.";
 
-  wrap.append(label, video, status);
+  media.append(video);
+  wrap.append(label, media, status);
 
   const widget = node.addDOMWidget("hemp_mask_overlay_player", "hemp_mask_player", wrap, {
     serialize: false,
     hideOnZoom: false,
   });
 
-  widget.computeSize = playerComputeSize(node, video);
+  widget.computedHeight = EMPTY_PLAYER_H;
+  widget.computeSize = playerComputeSize(node);
 
   node._hempMaskWrapEl = wrap;
+  node._hempMaskMediaEl = media;
   node._hempMaskVideoEl = video;
   node._hempMaskStatusEl = status;
   node._hempMaskPlayerWidget = widget;
@@ -158,19 +191,18 @@ function attachPlayer(node) {
   video.addEventListener("loadedmetadata", () => {
     if (node._hempMaskPlayerVisible === false) return;
     layoutPlayer(node);
-    fitNodeToWidget(node);
-    layoutPlayer(node);
+    app.graph?.setDirtyCanvas?.(true, true);
   });
 
   const prevResize = node.onResize;
-  node.onResize = function (size) {
+  node.onResize = function () {
     const r = prevResize?.apply(this, arguments);
     layoutPlayer(this);
+    app.graph?.setDirtyCanvas?.(true, true);
     return r;
   };
 
   layoutPlayer(node);
-  // Widgets may not exist yet on first create; retry shortly.
   wireShowPlayerToggle(node);
   queueMicrotask(() => wireShowPlayerToggle(node));
   setTimeout(() => wireShowPlayerToggle(node), 0);
@@ -183,7 +215,6 @@ function setPreview(node, meta) {
   const show = meta?.show_player !== false && !!meta?.filename;
   const widget = getShowPlayerWidget(node);
   if (widget && meta && typeof meta.show_player === "boolean") {
-    // Keep widget in sync if execution says player was off.
     if (widget.value !== meta.show_player) {
       widget.value = meta.show_player;
     }
@@ -211,8 +242,7 @@ function setPreview(node, meta) {
   const tryPlay = () => {
     if (node._hempMaskPlayerVisible === false) return;
     layoutPlayer(node);
-    fitNodeToWidget(node);
-    layoutPlayer(node);
+    app.graph?.setDirtyCanvas?.(true, true);
     if (!video.autoplay) return;
     const p = video.play();
     if (p && typeof p.catch === "function") {
