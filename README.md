@@ -13,7 +13,13 @@ Nodes appear under **Hempdawg → Alpha Gen** in the ComfyUI add-node menu.
 | **Hempdawg Black Image (Video Size)** | Takes a `VIDEO`, creates a solid black `IMAGE` at the same size, and outputs the shortest side length. |
 | **Hempdawg Mask Overlay Player** | Applies a matte video as alpha on the original (invert option), optional in-node preview (`show_player` on/off — turn off if using Alpha Video Save), `VIDEO` / `RGBA` / `MASK` outputs. |
 | **Hempdawg Video Resize ×32** | Resizes a `VIDEO` so width and height snap to the nearest multiple of 32; shows size/ratio on the node. |
-| **Hempdawg Alpha Video Save** | Preview RGBA + audio, then **Save File** when ready. Writes **ProRes 4444 MOV** or **WebM VP9** with alpha and audio to a directory you choose. |
+| **Hempdawg Alpha Video Save** | In-node preview of RGBA + audio, then **Save File** when ready. Writes **ProRes 4444 MOV** or **WebM VP9** with alpha and audio to a directory you choose. |
+
+### In-node preview & save
+
+- **Mask Overlay Player** — optional checkerboard preview. Turn **`show_player` off** if you only use Alpha Video Save (skips preview encode and hides the player).
+- **Alpha Video Save** — always has its own preview plus a **Save File** button (manual save after you like the result).
+- Both players stay **inside the node** and resize when you drag the node larger/smaller (`object-fit: contain`).
 
 ---
 
