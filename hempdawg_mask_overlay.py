@@ -231,6 +231,10 @@ class HempdawgMaskOverlayPlayer:
                     "default": True,
                     "tooltip": "On: black subject / white bg mattes. Off: white=keep subject (Alpha Gen docs).",
                 }),
+                "show_player": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Off: hide in-node preview and skip preview encode (use Alpha Video Save instead).",
+                }),
                 "loop": ("BOOLEAN", {"default": True}),
                 "autoplay": ("BOOLEAN", {"default": True}),
                 "mute": ("BOOLEAN", {"default": False}),
@@ -247,7 +251,7 @@ class HempdawgMaskOverlayPlayer:
     CATEGORY = "Hempdawg/Alpha Gen"
     DESCRIPTION = (
         "Apply a matte video as alpha on the original: subject stays, background goes transparent. "
-        "Optional AUDIO overrides/adds soundtrack. Preview stays inside the node. "
+        "Optional AUDIO overrides/adds soundtrack. Toggle show_player off if you only use Alpha Video Save. "
         "VIDEO out for Save Video; rgba is RGBA frames."
     )
 
@@ -256,9 +260,10 @@ class HempdawgMaskOverlayPlayer:
         original_video,
         mask_video,
         invert_mask,
-        loop,
-        autoplay,
-        mute,
+        show_player=True,
+        loop=True,
+        autoplay=True,
+        mute=False,
         audio=None,
         **_ignored,
     ):
@@ -287,27 +292,29 @@ class HempdawgMaskOverlayPlayer:
         if out_video is None:
             raise RuntimeError("Could not build VIDEO output (Comfy video API unavailable).")
 
-        preview_rgb = _composite_preview(rgb, alpha, cell=16)
-        temp_dir = folder_paths.get_temp_directory()
-        os.makedirs(temp_dir, exist_ok=True)
-        filename = f"hemp_mask_overlay_{int(time.time() * 1000)}_{os.getpid()}.mp4"
-        filepath = os.path.join(temp_dir, filename)
-        _write_preview_mp4(preview_rgb, fps, filepath, audio=out_audio)
-
-        preview = {
-            "filename": filename,
-            "subfolder": "",
-            "type": "temp",
-            "format": "video/mp4",
-            "frame_rate": fps,
-            "loop": bool(loop),
-            "autoplay": bool(autoplay),
-            "muted": bool(mute),
-            "has_audio": out_audio is not None,
-        }
+        ui_payload = [{"show_player": False}]
+        if show_player:
+            preview_rgb = _composite_preview(rgb, alpha, cell=16)
+            temp_dir = folder_paths.get_temp_directory()
+            os.makedirs(temp_dir, exist_ok=True)
+            filename = f"hemp_mask_overlay_{int(time.time() * 1000)}_{os.getpid()}.mp4"
+            filepath = os.path.join(temp_dir, filename)
+            _write_preview_mp4(preview_rgb, fps, filepath, audio=out_audio)
+            ui_payload = [{
+                "filename": filename,
+                "subfolder": "",
+                "type": "temp",
+                "format": "video/mp4",
+                "frame_rate": fps,
+                "loop": bool(loop),
+                "autoplay": bool(autoplay),
+                "muted": bool(mute),
+                "has_audio": out_audio is not None,
+                "show_player": True,
+            }]
 
         return {
-            "ui": {"hemp_mask_videos": [preview]},
+            "ui": {"hemp_mask_videos": ui_payload},
             "result": (out_video, rgba, alpha, out_audio, float(fps)),
         }
 
