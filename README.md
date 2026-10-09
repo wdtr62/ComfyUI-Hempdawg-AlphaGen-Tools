@@ -103,19 +103,6 @@ No extra `pip install` is required for these nodes beyond a normal ComfyUI + ffm
 
 ---
 
-## Related package
-
-Utility / image / LoRA / save helpers live in a separate package:
-
-**[ComfyUI-Hempdawg-Utils](https://github.com/wdtr62/ComfyUI-Hempdawg-Utils)**
-
-Install both if you want the full Hempdawg menu set. This Alpha Gen package is enough for the matte overlay + transparent export path.
-
----
-
-
----
-
 ## Example workflow
 
 A ready graph is included:
